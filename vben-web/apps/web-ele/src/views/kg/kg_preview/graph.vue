@@ -169,6 +169,11 @@ interface GraphEdge extends LinkObject<GraphNode> {
 	properties?: Record<string, any>
 }
 
+interface HighlightOptions {
+	seedNodeIds?: string[]
+	maxDepth?: number
+}
+
 interface VisualizerData {
 	nodes: GraphNode[]
 	edges: GraphEdge[]
@@ -965,23 +970,38 @@ function populateDemoData() {
 	const nodes: GraphNode[] = [
 		{ id: 'node1', label: '张三', value: 18, category: 'PERSON' },
 		{ id: 'node2', label: '李四', value: 15, category: 'PERSON' },
-		{ id: 'node3', label: '百度', value: 28, category: 'ORGANIZATION' },
-		{ id: 'node4', label: '腾讯', value: 26, category: 'ORGANIZATION' },
-		{ id: 'node5', label: '北京', value: 20, category: 'LOCATION' },
-		{ id: 'node6', label: '上海', value: 19, category: 'LOCATION' },
-		{ id: 'node7', label: 'Python', value: 17, category: 'PRODUCT' },
-		{ id: 'node8', label: 'AI', value: 24, category: 'CONCEPT' }
+		{ id: 'node3', label: '王敏', value: 16, category: 'PERSON' },
+		{ id: 'node4', label: '百度医疗知识库', value: 28, category: 'ORGANIZATION' },
+		{ id: 'node5', label: '腾讯云医学平台', value: 26, category: 'ORGANIZATION' },
+		{ id: 'node6', label: '北京协和医院', value: 24, category: 'ORGANIZATION' },
+		{ id: 'node7', label: '上海瑞金医院', value: 23, category: 'ORGANIZATION' },
+		{ id: 'node8', label: '北京', value: 20, category: 'LOCATION' },
+		{ id: 'node9', label: '上海', value: 19, category: 'LOCATION' },
+		{ id: 'node10', label: '肺炎', value: 18, category: 'DISEASE' },
+		{ id: 'node11', label: 'CT 影像', value: 17, category: 'PRODUCT' },
+		{ id: 'node12', label: '知识图谱问答', value: 24, category: 'CONCEPT' },
+		{ id: 'node13', label: '呼吸科', value: 14, category: 'DEPARTMENT' },
+		{ id: 'node14', label: '临床路径', value: 16, category: 'CONCEPT' },
+		{ id: 'node15', label: '多模态检索', value: 18, category: 'CONCEPT' }
 	]
 
 	const edges: GraphEdge[] = [
-		{ source: 'node1', target: 'node3', label: '工作于', value: 1 },
-		{ source: 'node2', target: 'node4', label: '就职于', value: 1 },
-		{ source: 'node3', target: 'node5', label: '总部在', value: 1 },
-		{ source: 'node4', target: 'node6', label: '总部在', value: 1 },
-		{ source: 'node1', target: 'node2', label: '同学', value: 1 },
-		{ source: 'node3', target: 'node7', label: '使用', value: 1 },
-		{ source: 'node4', target: 'node8', label: '布局', value: 1 },
-		{ source: 'node7', target: 'node8', label: '相关', value: 1 }
+		{ source: 'node1', target: 'node4', label: '负责建设', value: 1.3 },
+		{ source: 'node2', target: 'node5', label: '参与研发', value: 1.2 },
+		{ source: 'node3', target: 'node6', label: '联合项目', value: 1.2 },
+		{ source: 'node4', target: 'node8', label: '总部在', value: 1 },
+		{ source: 'node5', target: 'node9', label: '总部在', value: 1 },
+		{ source: 'node6', target: 'node13', label: '设有', value: 1.1 },
+		{ source: 'node7', target: 'node13', label: '重点科室', value: 1.1 },
+		{ source: 'node10', target: 'node11', label: '诊断依赖', value: 1.3 },
+		{ source: 'node10', target: 'node13', label: '治疗归属', value: 1.2 },
+		{ source: 'node12', target: 'node10', label: '回答疾病问题', value: 1.4 },
+		{ source: 'node12', target: 'node14', label: '支撑流程', value: 1.2 },
+		{ source: 'node12', target: 'node15', label: '结合能力', value: 1.2 },
+		{ source: 'node14', target: 'node6', label: '落地机构', value: 1.1 },
+		{ source: 'node15', target: 'node11', label: '检索媒介', value: 1.1 },
+		{ source: 'node2', target: 'node1', label: '协作', value: 1 },
+		{ source: 'node1', target: 'node12', label: '应用场景', value: 1.3 }
 	]
 
 	graphData.value = { nodes, edges }
@@ -1273,7 +1293,75 @@ function easeInCubic(t: number): number {
 	return t * t * t
 }
 
-function highlightElements(nodeIds: string[], linkIds: string[]) {
+function getLayerScaleFactor(depth: number): number {
+	if (depth <= 0) return 1.52
+	if (depth === 1) return 1.28
+	if (depth === 2) return 1.12
+	if (depth === 3) return 1.02
+	return 0.94
+}
+
+function setNodeOpacityAndGlow(threeObj: any, opacity: number, pulseIntensity = 0, baseScale = 1) {
+	if (!threeObj) return
+	const safeOpacity = Math.min(Math.max(opacity, 0.05), 1)
+	const pulseScale = baseScale * (1 + pulseIntensity * 0.24)
+	threeObj.scale?.setScalar?.(pulseScale)
+
+	const applyMaterial = (material: any) => {
+		if (!material) return
+		material.opacity = safeOpacity
+		material.transparent = safeOpacity < 0.999
+		if ('emissiveIntensity' in material && typeof material.emissiveIntensity === 'number') {
+			material.emissiveIntensity = 0.12 + pulseIntensity * 1.8
+		}
+		material.needsUpdate = true
+	}
+
+	if (threeObj.material) {
+		applyMaterial(threeObj.material)
+		return
+	}
+
+	if (threeObj.traverse) {
+		threeObj.traverse((child: any) => {
+			if (child?.material) {
+				applyMaterial(child.material)
+			}
+		})
+	}
+}
+
+function focusCameraOnSeedNodes(nodeMap: Map<string, any>, seedNodeIds: string[]) {
+	if (!graphInstance || !seedNodeIds.length) return
+	const points = seedNodeIds
+		.map(id => nodeMap.get(id))
+		.filter(Boolean)
+		.map((node: any) => ({
+			x: Number(node.x ?? node.__threeObj?.position?.x ?? 0),
+			y: Number(node.y ?? node.__threeObj?.position?.y ?? 0),
+			z: Number(node.z ?? node.__threeObj?.position?.z ?? 0)
+		}))
+
+	if (!points.length) return
+	const centroid = points.reduce((acc, p) => {
+		acc.x += p.x
+		acc.y += p.y
+		acc.z += p.z
+		return acc
+	}, { x: 0, y: 0, z: 0 })
+	centroid.x /= points.length
+	centroid.y /= points.length
+	centroid.z /= points.length
+
+	const radius = Math.max(220, 140 + points.length * 45)
+	graphInstance.cameraPosition(
+		{ x: centroid.x + radius, y: centroid.y + radius * 0.35, z: centroid.z + radius * 1.2 },
+		{ x: centroid.x, y: centroid.y, z: centroid.z },
+		1100
+	)
+}
+
+function highlightElements(nodeIds: string[], linkIds: string[], options: HighlightOptions = {}) {
 	if (!graphInstance) return
 
 	// 1. 状态重置与初始化
@@ -1347,11 +1435,32 @@ function highlightElements(nodeIds: string[], linkIds: string[]) {
 			}
 		})
 
-		// BFS 分层
+		// BFS 分层（支持从指定种子节点开始，形成明显的层级扩散效果）
 		const waves: Array<{ nodes: string[], links: string[] }> = []
 		const visited = new Set<string>()
 		const queue: string[] = []
 		const remainingNodes = new Set(nodeIds)
+		const seedNodeSet = new Set(
+			(options.seedNodeIds ?? [])
+				.map(id => String(id))
+				.filter(id => subsetNodeSet.has(id))
+		)
+		const seedNodeIds = Array.from(seedNodeSet)
+		const maxDepth = Number.isFinite(options.maxDepth) ? Math.max(1, Number(options.maxDepth)) : 4
+		const depthMap = new Map<string, number>()
+
+		if (seedNodeSet.size > 0) {
+			const seeds = Array.from(seedNodeSet)
+			waves.push({ nodes: seeds, links: [] })
+			for (const seed of seeds) {
+				visited.add(seed)
+				remainingNodes.delete(seed)
+				queue.push(seed)
+				depthMap.set(seed, 0)
+			}
+		}
+
+		focusCameraOnSeedNodes(nodeMap, seedNodeIds)
 		
 		while (remainingNodes.size > 0) {
 			if (queue.length === 0) {
@@ -1359,6 +1468,7 @@ function highlightElements(nodeIds: string[], linkIds: string[]) {
 				queue.push(nextStart)
 				visited.add(nextStart)
 				remainingNodes.delete(nextStart)
+				depthMap.set(nextStart, 0)
 				waves.push({ nodes: [nextStart], links: [] })
 			}
 
@@ -1368,6 +1478,10 @@ function highlightElements(nodeIds: string[], linkIds: string[]) {
 			
 			for (let i = 0; i < currentLevelSize; i++) {
 				const u = queue.shift()!
+				const depth = depthMap.get(u) ?? 0
+				if (depth >= maxDepth) {
+					continue
+				}
 				const neighbors = adjacency.get(u) || []
 				
 				for (const { neighbor: v, linkId } of neighbors) {
@@ -1375,6 +1489,7 @@ function highlightElements(nodeIds: string[], linkIds: string[]) {
 						visited.add(v)
 						remainingNodes.delete(v)
 						queue.push(v)
+						depthMap.set(v, depth + 1)
 						nextLevelNodes.push(v)
 						nextLevelLinks.push(linkId)
 					}
@@ -1387,10 +1502,10 @@ function highlightElements(nodeIds: string[], linkIds: string[]) {
 		}
 
 		// 3. 预计算时间
-		const totalDuration = 3000
+		const totalDuration = 4400
 		const waveCount = Math.max(waves.length, 1)
-		const nodeFadeDuration = 600 
-		const linkFadeDuration = 800 // 增加连线填充时间，使其更明显
+		const nodeFadeDuration = 900
+		const linkFadeDuration = 1200 // 增加连线填充时间，使其更明显
 		
 		let waveDelay = 0
 		if (waveCount > 1) {
@@ -1404,7 +1519,7 @@ function highlightElements(nodeIds: string[], linkIds: string[]) {
 		waves.forEach((wave, index) => {
 			const waveStart = index * waveDelay
 			wave.links.forEach(id => startTimes.set('link_' + id, globalStartTime + waveStart))
-			const nodeDelay = wave.links.length > 0 ? 100 : 0
+			const nodeDelay = wave.links.length > 0 ? 170 : 0
 			wave.nodes.forEach(id => startTimes.set('node_' + id, globalStartTime + waveStart + nodeDelay))
 		})
 
@@ -1426,37 +1541,16 @@ function highlightElements(nodeIds: string[], linkIds: string[]) {
 				const elapsed = now - startTime
 				if (elapsed < 0) return
 
-				let progress = Math.min(elapsed / nodeFadeDuration, 1)
+				const progress = Math.min(elapsed / nodeFadeDuration, 1)
 				if (progress < 1) isAnyAnimating = true
-				
-				const eased = easeInCubic(progress)
-				const currentOpacity = 0.1 + (1 - 0.1) * eased
 
-				const obj = nodeObj.__threeObj
-				if (obj.material) {
-					obj.material.opacity = currentOpacity
-					// 动画结束或接近结束时，关闭 transparent 以恢复默认材质效果（如光照、遮挡）
-					if (currentOpacity >= 0.99) {
-						obj.material.opacity = 1
-						obj.material.transparent = false
-						obj.material.needsUpdate = true
-					} else {
-						obj.material.transparent = true
-					}
-				} else if (obj.children) {
-					obj.traverse((child: any) => {
-						if (child.material) {
-							child.material.opacity = currentOpacity
-							if (currentOpacity >= 0.99) {
-								child.material.opacity = 1
-								child.material.transparent = false
-								child.material.needsUpdate = true
-							} else {
-								child.material.transparent = true
-							}
-						}
-					})
-				}
+				const eased = easeInCubic(progress)
+				const currentOpacity = 0.05 + (1 - 0.05) * eased
+				const pulse = Math.max(0, 1 - progress)
+				const depth = depthMap.get(nodeId) ?? 4
+				const layerScale = getLayerScaleFactor(depth)
+
+				setNodeOpacityAndGlow(nodeObj.__threeObj, currentOpacity, pulse, layerScale)
 			})
 
 			// 连线动画 (管道填充)
@@ -1501,6 +1595,15 @@ function highlightElements(nodeIds: string[], linkIds: string[]) {
 
 			if (isAnyAnimating || (now - globalStartTime < totalDuration + 1000)) {
 				requestAnimationFrame(animateFrame)
+			} else {
+				nodeIds.forEach(nodeId => {
+					const nodeObj = nodeMap.get(nodeId)
+					if (nodeObj?.__threeObj) {
+						const depth = depthMap.get(nodeId) ?? 4
+						const layerScale = getLayerScaleFactor(depth)
+						setNodeOpacityAndGlow(nodeObj.__threeObj, 1, 0, layerScale)
+					}
+				})
 			}
 		}
 
