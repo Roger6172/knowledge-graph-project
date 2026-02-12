@@ -27,6 +27,61 @@ const handleParamUpdate = (newParams: typeof params) => {
   Object.assign(params, newParams)
 }
 
+
+
+const buildLayeredHighlight = (seedNodeIds: string[], maxDepth = 3) => {
+  const edges = graphRef.value?.getEdges?.() ?? []
+  const adjacency = new Map<string, Set<string>>()
+
+  edges.forEach((edge) => {
+    const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source
+    const targetId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target
+    if (!sourceId || !targetId) return
+
+    if (!adjacency.has(sourceId)) adjacency.set(sourceId, new Set())
+    if (!adjacency.has(targetId)) adjacency.set(targetId, new Set())
+    adjacency.get(sourceId)?.add(targetId)
+    adjacency.get(targetId)?.add(sourceId)
+  })
+
+  const visited = new Set<string>()
+  const queue: Array<{ depth: number; id: string }> = []
+  seedNodeIds.forEach((id) => {
+    visited.add(id)
+    queue.push({ depth: 0, id })
+  })
+
+  while (queue.length > 0) {
+    const current = queue.shift()!
+    if (current.depth >= maxDepth) continue
+
+    const neighbors = adjacency.get(current.id)
+    if (!neighbors) continue
+
+    neighbors.forEach((neighborId) => {
+      if (visited.has(neighborId)) return
+      visited.add(neighborId)
+      queue.push({ depth: current.depth + 1, id: neighborId })
+    })
+  }
+
+  const layeredNodeIds = Array.from(visited)
+  const nodeSet = new Set(layeredNodeIds)
+  const layeredLinkIds = edges
+    .filter((edge) => {
+      const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source
+      const targetId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target
+      return nodeSet.has(sourceId) && nodeSet.has(targetId)
+    })
+    .map((edge) => {
+      const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source
+      const targetId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target
+      return `${sourceId}-${targetId}`
+    })
+
+  return { layeredNodeIds, layeredLinkIds }
+}
+
 const handleRefresh = () => {
   graphRef.value?.fetchGraphData()
 }
@@ -88,25 +143,9 @@ const handleHighlightEntities = (entities: EntityInfo[]) => {
     return
   }
 
-  // 自动计算与高亮节点相关的连线
-  const edges = graphRef.value?.getEdges?.() ?? []
-  const nodeIdSet = new Set(targetNodeIds)
-  
-  // 找出两端节点都在高亮集合中的连线
-  const relatedLinkIds = edges
-    .filter(edge => {
-      const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source
-      const targetId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target
-      return nodeIdSet.has(sourceId) || nodeIdSet.has(targetId)
-    })
-    .map((edge) => {
-      const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source
-      const targetId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target
-      return `${sourceId}-${targetId}`
-    })
-
-  console.log('[KG Highlight Entities] 执行高亮, 节点:', targetNodeIds, '连线:', relatedLinkIds)
-  graphRef.value?.highlightElements(targetNodeIds, relatedLinkIds)
+  console.log('[KG Highlight Entities] 执行层级高亮，核心节点:', targetNodeIds)
+  const { layeredNodeIds, layeredLinkIds } = buildLayeredHighlight(targetNodeIds, 3)
+  graphRef.value?.highlightElements(layeredNodeIds, layeredLinkIds, { seedNodeIds: targetNodeIds, maxDepth: 3 })
 }
 
 // 处理知识高亮（问答联动）
@@ -154,26 +193,9 @@ const handleHighlightKnowledge = (data: { entities: EntityInfo[]; relations: any
     return
   }
 
-  // 自动计算与高亮节点相关的连线
-  const edges = graphRef.value?.getEdges?.() ?? []
-  const nodeIdSet = new Set(targetNodeIds)
-  
-  // 找出两端节点都在高亮集合中的连线
-  const relatedLinkIds = edges
-    .filter(edge => {
-      const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source
-      const targetId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target
-      return nodeIdSet.has(sourceId) || nodeIdSet.has(targetId)
-    })
-    .map((edge, idx) => {
-      // 为连线生成临时 ID（如果没有）
-      const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source
-      const targetId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target
-      return `${sourceId}-${targetId}`
-    })
-
-  console.log('[KG Highlight] 执行高亮, 节点:', targetNodeIds, '连线:', relatedLinkIds)
-  graphRef.value?.highlightElements(targetNodeIds, relatedLinkIds)
+  console.log('[KG Highlight] 执行层级高亮，核心节点:', targetNodeIds)
+  const { layeredNodeIds, layeredLinkIds } = buildLayeredHighlight(targetNodeIds, 3)
+  graphRef.value?.highlightElements(layeredNodeIds, layeredLinkIds, { seedNodeIds: targetNodeIds, maxDepth: 3 })
 }
 
 </script>
