@@ -82,6 +82,28 @@ const buildLayeredHighlight = (seedNodeIds: string[], maxDepth = 3) => {
   return { layeredNodeIds, layeredLinkIds }
 }
 
+
+
+const buildFallbackEntitiesFromQuestion = (question: string): EntityInfo[] => {
+  const q = question.toLowerCase();
+  const candidates: Array<{ keywords: string[]; name: string; type: string }> = [
+    { keywords: ['肺炎', '咳嗽', '发热', '呼吸'], name: '肺炎', type: 'DISEASE' },
+    { keywords: ['ct', '影像', '检查'], name: 'CT 影像', type: 'PRODUCT' },
+    { keywords: ['路径', '流程'], name: '临床路径', type: 'CONCEPT' },
+    { keywords: ['检索', '多模态'], name: '多模态检索', type: 'CONCEPT' },
+    { keywords: ['问答', '图谱'], name: '知识图谱问答', type: 'CONCEPT' },
+  ];
+
+  const result = candidates
+    .filter((item) => item.keywords.some((keyword) => q.includes(keyword)))
+    .map((item) => ({ name: item.name, type: item.type } as EntityInfo));
+
+  return result.length ? result : ([
+    { name: '知识图谱问答', type: 'CONCEPT' },
+    { name: '多模态检索', type: 'CONCEPT' },
+  ] as EntityInfo[]);
+}
+
 const handleRefresh = () => {
   graphRef.value?.fetchGraphData()
 }
@@ -149,7 +171,7 @@ const handleHighlightEntities = (entities: EntityInfo[]) => {
 }
 
 // 处理知识高亮（问答联动）
-const handleHighlightKnowledge = (data: { entities: EntityInfo[]; relations: any[] }) => {
+const handleHighlightKnowledge = (data: { entities: EntityInfo[]; relations: any[]; question?: string }) => {
   console.log('[KG Highlight] 收到高亮请求:', data)
   
   // 确保高亮节点不会被搜索/分类过滤掉
@@ -160,7 +182,10 @@ const handleHighlightKnowledge = (data: { entities: EntityInfo[]; relations: any
   const nodes = graphRef.value?.getNodes?.() ?? []
   console.log('[KG Highlight] 当前图谱节点数:', nodes.length, '示例:', nodes.slice(0, 3))
 
-  const entities = data.entities || []
+  let entities = data.entities || []
+  if (!entities.length && data.question) {
+    entities = buildFallbackEntitiesFromQuestion(data.question)
+  }
   console.log('[KG Highlight] 待匹配实体:', entities)
 
   // 优先使用 neo_id，匹配当前图谱的节点 id
