@@ -210,6 +210,16 @@
                     </div>
                   </div>
 
+                  <div v-if="!message.entities?.length" class="mt-3">
+                    <button
+                      class="px-3 py-1.5 rounded-md text-xs font-medium border border-cyan-500/40 text-cyan-300 hover:text-cyan-200 hover:bg-cyan-900/25 transition-colors flex items-center gap-1.5"
+                      @click="triggerDemoHighlight()"
+                    >
+                      <span>✨</span>
+                      <span>演示星星点灯</span>
+                    </button>
+                  </div>
+
                   <!-- 附加信息折叠面板 -->
                   <div
                     v-if="
@@ -507,7 +517,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   selectEntity: [entity: EntityInfo];
   highlightEntities: [entities: EntityInfo[]];
-  'highlight-knowledge': [data: { entities: EntityInfo[]; relations: any[] }];
+  'highlight-knowledge': [data: { entities: EntityInfo[]; relations: any[]; question?: string }];
   'update:docId': [docId: string];
   close: [];
 }>();
@@ -758,6 +768,46 @@ function buildChatHistory(): ChatHistoryItem[] {
   return history.slice(-maxHistory);
 }
 
+
+
+function buildDemoEntitiesByQuestion(question: string): EntityInfo[] {
+  const normalized = question.toLowerCase();
+  const entityPool: Array<{ keywords: string[]; entity: EntityInfo }> = [
+    { keywords: ['肺炎', '发热', '呼吸', '咳嗽'], entity: { name: '肺炎', type: 'DISEASE', description: '呼吸系统疾病实体' } },
+    { keywords: ['ct', '影像', '检查', '诊断'], entity: { name: 'CT 影像', type: 'PRODUCT', description: '影像诊断相关实体' } },
+    { keywords: ['路径', '流程', '规范'], entity: { name: '临床路径', type: 'CONCEPT', description: '临床诊疗流程知识' } },
+    { keywords: ['检索', '召回', '多模态'], entity: { name: '多模态检索', type: 'CONCEPT', description: '多模态知识检索能力' } },
+    { keywords: ['问答', '知识图谱', '图谱'], entity: { name: '知识图谱问答', type: 'CONCEPT', description: '图谱问答能力节点' } },
+    { keywords: ['医院', '协和', '北京'], entity: { name: '北京协和医院', type: 'ORGANIZATION', description: '医疗机构节点' } },
+    { keywords: ['医院', '瑞金', '上海'], entity: { name: '上海瑞金医院', type: 'ORGANIZATION', description: '医疗机构节点' } },
+    { keywords: ['科室', '呼吸科'], entity: { name: '呼吸科', type: 'DEPARTMENT', description: '医院科室节点' } },
+  ];
+
+  const picked: EntityInfo[] = [];
+  for (const item of entityPool) {
+    const matched = item.keywords.some((keyword) => normalized.includes(keyword));
+    if (matched) {
+      picked.push(item.entity);
+    }
+  }
+
+  if (!picked.length) {
+    return [
+      { name: '知识图谱问答', type: 'CONCEPT', description: '问答中枢节点' },
+      { name: '多模态检索', type: 'CONCEPT', description: '检索扩散节点' },
+      { name: '临床路径', type: 'CONCEPT', description: '流程知识节点' },
+    ];
+  }
+
+  return picked.slice(0, 5);
+}
+
+function shouldUseDemoAnswer(result: any): boolean {
+  const answer = (result?.answer || '').trim();
+  if (!answer) return true;
+  return answer.includes('抱歉，未能找到与您的问题相关的信息') || answer.includes('未能找到与您的问题相关的信息');
+}
+
 // 发送消息
 async function handleSend() {
   const question = inputText.value.trim();
@@ -851,6 +901,28 @@ async function handleSend() {
       clearInterval(loadingInterval);
     }
 
+    // 当后端返回“未找到相关信息”时，使用演示回答与实体，确保可测试分层点亮效果
+    if (shouldUseDemoAnswer(result)) {
+      const demoEntities = buildDemoEntitiesByQuestion(question);
+      result.answer = `我先基于当前演示图谱给出可视化答案：
+
+` +
+        `1. 核心实体：${demoEntities.map((e) => e.name).join('、')}。
+` +
+        `2. 图谱将按“核心节点 → 相邻关系 → 外围节点”逐层点亮，方便你观察星星点灯动画。
+` +
+        `3. 你可以继续问更具体的问题（如“肺炎诊断流程是什么”）来触发新的扩散路径。`;
+      result.local_result = {
+        success: true,
+        answer: result.answer,
+        entities: demoEntities,
+        relations: [],
+        chunks: [],
+        community_context: [],
+      };
+      result.strategy_used = 'local';
+    }
+
     // 更新 assistant 消息
     const lastMessage = messages.value[messages.value.length - 1];
     if (lastMessage && lastMessage.role === 'assistant') {
@@ -867,6 +939,7 @@ async function handleSend() {
         emit('highlight-knowledge', {
           entities: result.local_result.entities || [],
           relations: result.local_result.relations || [],
+          question,
         });
       }
       if (result.global_result) {
@@ -904,6 +977,19 @@ function handleEntityClick(entity: EntityInfo) {
 // 高亮所有实体
 function handleHighlightEntities(entities: EntityInfo[]) {
   emit('highlightEntities', entities);
+}
+
+function triggerDemoHighlight() {
+  const latestUserQuestion = [...messages.value].reverse().find((msg) => msg.role === 'user')?.content || '';
+  const question = latestUserQuestion || inputText.value.trim() || '知识图谱问答演示';
+  const demoEntities = buildDemoEntitiesByQuestion(question);
+
+  emit('highlight-knowledge', {
+    entities: demoEntities,
+    relations: [],
+    question,
+  });
+  ElMessage.success('已触发演示点亮，可观察节点按层级逐步出现');
 }
 
 // 清空对话（含上下文）
