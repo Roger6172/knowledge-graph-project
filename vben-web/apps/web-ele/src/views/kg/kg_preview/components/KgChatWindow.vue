@@ -210,6 +210,16 @@
                     </div>
                   </div>
 
+                  <div v-if="!message.entities?.length" class="mt-3">
+                    <button
+                      class="px-3 py-1.5 rounded-md text-xs font-medium border border-cyan-500/40 text-cyan-300 hover:text-cyan-200 hover:bg-cyan-900/25 transition-colors flex items-center gap-1.5"
+                      @click="triggerDemoHighlight()"
+                    >
+                      <span>✨</span>
+                      <span>演示星星点灯</span>
+                    </button>
+                  </div>
+
                   <!-- 附加信息折叠面板 -->
                   <div
                     v-if="
@@ -967,6 +977,19 @@ function handleEntityClick(entity: EntityInfo) {
 // 高亮所有实体
 function handleHighlightEntities(entities: EntityInfo[]) {
   emit('highlightEntities', entities);
+}
+
+function triggerDemoHighlight() {
+  const latestUserQuestion = [...messages.value].reverse().find((msg) => msg.role === 'user')?.content || '';
+  const question = latestUserQuestion || inputText.value.trim() || '知识图谱问答演示';
+  const demoEntities = buildDemoEntitiesByQuestion(question);
+
+  emit('highlight-knowledge', {
+    entities: demoEntities,
+    relations: [],
+    question,
+  });
+  ElMessage.success('已触发演示点亮，可观察节点按层级逐步出现');
 }
 
 // 清空对话（含上下文）
