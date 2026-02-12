@@ -1293,6 +1293,18 @@ function easeInCubic(t: number): number {
 	return t * t * t
 }
 
+function getLayerScaleFactor(depth: number): number {
+	if (depth <= 0) return 1.52
+	if (depth === 1) return 1.28
+	if (depth === 2) return 1.12
+	if (depth === 3) return 1.02
+	return 0.94
+}
+
+function setNodeOpacityAndGlow(threeObj: any, opacity: number, pulseIntensity = 0, baseScale = 1) {
+	if (!threeObj) return
+	const safeOpacity = Math.min(Math.max(opacity, 0.05), 1)
+	const pulseScale = baseScale * (1 + pulseIntensity * 0.24)
 function setNodeOpacityAndGlow(threeObj: any, opacity: number, pulseIntensity = 0) {
 	if (!threeObj) return
 	const safeOpacity = Math.min(Math.max(opacity, 0.08), 1)
@@ -1304,6 +1316,7 @@ function setNodeOpacityAndGlow(threeObj: any, opacity: number, pulseIntensity = 
 		material.opacity = safeOpacity
 		material.transparent = safeOpacity < 0.999
 		if ('emissiveIntensity' in material && typeof material.emissiveIntensity === 'number') {
+			material.emissiveIntensity = 0.12 + pulseIntensity * 1.8
 			material.emissiveIntensity = 0.05 + pulseIntensity * 1.45
 		}
 		material.needsUpdate = true
@@ -1321,6 +1334,36 @@ function setNodeOpacityAndGlow(threeObj: any, opacity: number, pulseIntensity = 
 			}
 		})
 	}
+}
+
+function focusCameraOnSeedNodes(nodeMap: Map<string, any>, seedNodeIds: string[]) {
+	if (!graphInstance || !seedNodeIds.length) return
+	const points = seedNodeIds
+		.map(id => nodeMap.get(id))
+		.filter(Boolean)
+		.map((node: any) => ({
+			x: Number(node.x ?? node.__threeObj?.position?.x ?? 0),
+			y: Number(node.y ?? node.__threeObj?.position?.y ?? 0),
+			z: Number(node.z ?? node.__threeObj?.position?.z ?? 0)
+		}))
+
+	if (!points.length) return
+	const centroid = points.reduce((acc, p) => {
+		acc.x += p.x
+		acc.y += p.y
+		acc.z += p.z
+		return acc
+	}, { x: 0, y: 0, z: 0 })
+	centroid.x /= points.length
+	centroid.y /= points.length
+	centroid.z /= points.length
+
+	const radius = Math.max(220, 140 + points.length * 45)
+	graphInstance.cameraPosition(
+		{ x: centroid.x + radius, y: centroid.y + radius * 0.35, z: centroid.z + radius * 1.2 },
+		{ x: centroid.x, y: centroid.y, z: centroid.z },
+		1100
+	)
 }
 
 function highlightElements(nodeIds: string[], linkIds: string[], options: HighlightOptions = {}) {
@@ -1407,6 +1450,7 @@ function highlightElements(nodeIds: string[], linkIds: string[], options: Highli
 				.map(id => String(id))
 				.filter(id => subsetNodeSet.has(id))
 		)
+		const seedNodeIds = Array.from(seedNodeSet)
 		const maxDepth = Number.isFinite(options.maxDepth) ? Math.max(1, Number(options.maxDepth)) : 4
 		const depthMap = new Map<string, number>()
 
@@ -1420,6 +1464,8 @@ function highlightElements(nodeIds: string[], linkIds: string[], options: Highli
 				depthMap.set(seed, 0)
 			}
 		}
+
+		focusCameraOnSeedNodes(nodeMap, seedNodeIds)
 		
 		while (remainingNodes.size > 0) {
 			if (queue.length === 0) {
@@ -1490,8 +1536,8 @@ function highlightElements(nodeIds: string[], linkIds: string[], options: Highli
 			let isAnyAnimating = false
 			
 			// 节点动画
-			nodeIds.forEach(nodeId => {
-				const startTime = startTimes.get('node_' + nodeId)
+				nodeIds.forEach(nodeId => {
+					const startTime = startTimes.get('node_' + nodeId)
 				if (!startTime) return
 
 				const nodeObj = nodeMap.get(nodeId)
@@ -1504,6 +1550,14 @@ function highlightElements(nodeIds: string[], linkIds: string[], options: Highli
 				if (progress < 1) isAnyAnimating = true
 				
 				const eased = easeInCubic(progress)
+					const currentOpacity = 0.05 + (1 - 0.05) * eased
+					const pulse = Math.max(0, 1 - progress)
+					const depth = depthMap.get(nodeId) ?? 4
+					const layerScale = getLayerScaleFactor(depth)
+
+					const obj = nodeObj.__threeObj
+					setNodeOpacityAndGlow(obj, currentOpacity, pulse, layerScale)
+				})
 				const currentOpacity = 0.08 + (1 - 0.08) * eased
 				const pulse = Math.max(0, 1 - progress)
 
@@ -1554,6 +1608,14 @@ function highlightElements(nodeIds: string[], linkIds: string[], options: Highli
 			if (isAnyAnimating || (now - globalStartTime < totalDuration + 1000)) {
 				requestAnimationFrame(animateFrame)
 			} else {
+					nodeIds.forEach(nodeId => {
+						const nodeObj = nodeMap.get(nodeId)
+						if (nodeObj?.__threeObj) {
+							const depth = depthMap.get(nodeId) ?? 4
+							const layerScale = getLayerScaleFactor(depth)
+							setNodeOpacityAndGlow(nodeObj.__threeObj, 1, 0, layerScale)
+						}
+					})
 				nodeIds.forEach(nodeId => {
 					const nodeObj = nodeMap.get(nodeId)
 					if (nodeObj?.__threeObj) {
