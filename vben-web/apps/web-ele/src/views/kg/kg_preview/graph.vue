@@ -1305,6 +1305,10 @@ function setNodeOpacityAndGlow(threeObj: any, opacity: number, pulseIntensity = 
 	if (!threeObj) return
 	const safeOpacity = Math.min(Math.max(opacity, 0.05), 1)
 	const pulseScale = baseScale * (1 + pulseIntensity * 0.24)
+function setNodeOpacityAndGlow(threeObj: any, opacity: number, pulseIntensity = 0) {
+	if (!threeObj) return
+	const safeOpacity = Math.min(Math.max(opacity, 0.08), 1)
+	const pulseScale = 1 + pulseIntensity * 0.22
 	threeObj.scale?.setScalar?.(pulseScale)
 
 	const applyMaterial = (material: any) => {
@@ -1313,6 +1317,7 @@ function setNodeOpacityAndGlow(threeObj: any, opacity: number, pulseIntensity = 
 		material.transparent = safeOpacity < 0.999
 		if ('emissiveIntensity' in material && typeof material.emissiveIntensity === 'number') {
 			material.emissiveIntensity = 0.12 + pulseIntensity * 1.8
+			material.emissiveIntensity = 0.05 + pulseIntensity * 1.45
 		}
 		material.needsUpdate = true
 	}
@@ -1553,6 +1558,12 @@ function highlightElements(nodeIds: string[], linkIds: string[], options: Highli
 					const obj = nodeObj.__threeObj
 					setNodeOpacityAndGlow(obj, currentOpacity, pulse, layerScale)
 				})
+				const currentOpacity = 0.08 + (1 - 0.08) * eased
+				const pulse = Math.max(0, 1 - progress)
+
+				const obj = nodeObj.__threeObj
+				setNodeOpacityAndGlow(obj, currentOpacity, pulse)
+			})
 
 			// 连线动画 (管道填充)
 			linkIds.forEach(linkId => {
@@ -1605,6 +1616,12 @@ function highlightElements(nodeIds: string[], linkIds: string[], options: Highli
 							setNodeOpacityAndGlow(nodeObj.__threeObj, 1, 0, layerScale)
 						}
 					})
+				nodeIds.forEach(nodeId => {
+					const nodeObj = nodeMap.get(nodeId)
+					if (nodeObj?.__threeObj) {
+						setNodeOpacityAndGlow(nodeObj.__threeObj, 1, 0)
+					}
+				})
 			}
 		}
 
