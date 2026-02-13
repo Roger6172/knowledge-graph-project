@@ -1305,10 +1305,6 @@ function setNodeOpacityAndGlow(threeObj: any, opacity: number, pulseIntensity = 
 	if (!threeObj) return
 	const safeOpacity = Math.min(Math.max(opacity, 0.05), 1)
 	const pulseScale = baseScale * (1 + pulseIntensity * 0.24)
-function setNodeOpacityAndGlow(threeObj: any, opacity: number, pulseIntensity = 0) {
-	if (!threeObj) return
-	const safeOpacity = Math.min(Math.max(opacity, 0.08), 1)
-	const pulseScale = 1 + pulseIntensity * 0.22
 	threeObj.scale?.setScalar?.(pulseScale)
 
 	const applyMaterial = (material: any) => {
@@ -1317,7 +1313,6 @@ function setNodeOpacityAndGlow(threeObj: any, opacity: number, pulseIntensity = 
 		material.transparent = safeOpacity < 0.999
 		if ('emissiveIntensity' in material && typeof material.emissiveIntensity === 'number') {
 			material.emissiveIntensity = 0.12 + pulseIntensity * 1.8
-			material.emissiveIntensity = 0.05 + pulseIntensity * 1.45
 		}
 		material.needsUpdate = true
 	}
@@ -1546,23 +1541,16 @@ function highlightElements(nodeIds: string[], linkIds: string[], options: Highli
 				const elapsed = now - startTime
 				if (elapsed < 0) return
 
-				let progress = Math.min(elapsed / nodeFadeDuration, 1)
+				const progress = Math.min(elapsed / nodeFadeDuration, 1)
 				if (progress < 1) isAnyAnimating = true
-				
+
 				const eased = easeInCubic(progress)
-					const currentOpacity = 0.05 + (1 - 0.05) * eased
-					const pulse = Math.max(0, 1 - progress)
-					const depth = depthMap.get(nodeId) ?? 4
-					const layerScale = getLayerScaleFactor(depth)
-
-					const obj = nodeObj.__threeObj
-					setNodeOpacityAndGlow(obj, currentOpacity, pulse, layerScale)
-				})
-				const currentOpacity = 0.08 + (1 - 0.08) * eased
+				const currentOpacity = 0.05 + (1 - 0.05) * eased
 				const pulse = Math.max(0, 1 - progress)
+				const depth = depthMap.get(nodeId) ?? 4
+				const layerScale = getLayerScaleFactor(depth)
 
-				const obj = nodeObj.__threeObj
-				setNodeOpacityAndGlow(obj, currentOpacity, pulse)
+				setNodeOpacityAndGlow(nodeObj.__threeObj, currentOpacity, pulse, layerScale)
 			})
 
 			// 连线动画 (管道填充)
@@ -1608,18 +1596,12 @@ function highlightElements(nodeIds: string[], linkIds: string[], options: Highli
 			if (isAnyAnimating || (now - globalStartTime < totalDuration + 1000)) {
 				requestAnimationFrame(animateFrame)
 			} else {
-					nodeIds.forEach(nodeId => {
-						const nodeObj = nodeMap.get(nodeId)
-						if (nodeObj?.__threeObj) {
-							const depth = depthMap.get(nodeId) ?? 4
-							const layerScale = getLayerScaleFactor(depth)
-							setNodeOpacityAndGlow(nodeObj.__threeObj, 1, 0, layerScale)
-						}
-					})
 				nodeIds.forEach(nodeId => {
 					const nodeObj = nodeMap.get(nodeId)
 					if (nodeObj?.__threeObj) {
-						setNodeOpacityAndGlow(nodeObj.__threeObj, 1, 0)
+						const depth = depthMap.get(nodeId) ?? 4
+						const layerScale = getLayerScaleFactor(depth)
+						setNodeOpacityAndGlow(nodeObj.__threeObj, 1, 0, layerScale)
 					}
 				})
 			}
