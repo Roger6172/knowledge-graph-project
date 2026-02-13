@@ -32,6 +32,7 @@ const handleParamUpdate = (newParams: typeof params) => {
 const buildLayeredHighlight = (seedNodeIds: string[], maxDepth = 3) => {
   const edges = graphRef.value?.getEdges?.() ?? []
   const adjacency = new Map<string, Set<string>>()
+  const edgeKeySet = new Set<string>()
 
   edges.forEach((edge) => {
     const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source
@@ -42,10 +43,27 @@ const buildLayeredHighlight = (seedNodeIds: string[], maxDepth = 3) => {
     if (!adjacency.has(targetId)) adjacency.set(targetId, new Set())
     adjacency.get(sourceId)?.add(targetId)
     adjacency.get(targetId)?.add(sourceId)
+
+    const key = `${sourceId}-${targetId}`
+    const reverseKey = `${targetId}-${sourceId}`
+    edgeKeySet.add(key)
+    edgeKeySet.add(reverseKey)
   })
 
   const visited = new Set<string>()
   const queue: Array<{ depth: number; id: string }> = []
+  const layeredLinkIds: string[] = []
+
+  const addLink = (from: string, to: string) => {
+    const key = `${from}-${to}`
+    const reverseKey = `${to}-${from}`
+    if (edgeKeySet.has(key)) {
+      layeredLinkIds.push(key)
+    } else if (edgeKeySet.has(reverseKey)) {
+      layeredLinkIds.push(reverseKey)
+    }
+  }
+
   seedNodeIds.forEach((id) => {
     visited.add(id)
     queue.push({ depth: 0, id })
@@ -61,25 +79,15 @@ const buildLayeredHighlight = (seedNodeIds: string[], maxDepth = 3) => {
     neighbors.forEach((neighborId) => {
       if (visited.has(neighborId)) return
       visited.add(neighborId)
+      addLink(current.id, neighborId)
       queue.push({ depth: current.depth + 1, id: neighborId })
     })
   }
 
   const layeredNodeIds = Array.from(visited)
-  const nodeSet = new Set(layeredNodeIds)
-  const layeredLinkIds = edges
-    .filter((edge) => {
-      const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source
-      const targetId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target
-      return nodeSet.has(sourceId) && nodeSet.has(targetId)
-    })
-    .map((edge) => {
-      const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source
-      const targetId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target
-      return `${sourceId}-${targetId}`
-    })
+  const uniqueLayeredLinkIds = Array.from(new Set(layeredLinkIds))
 
-  return { layeredNodeIds, layeredLinkIds }
+  return { layeredNodeIds, layeredLinkIds: uniqueLayeredLinkIds }
 }
 
 
