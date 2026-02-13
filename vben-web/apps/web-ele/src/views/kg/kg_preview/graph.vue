@@ -1531,8 +1531,8 @@ function highlightElements(nodeIds: string[], linkIds: string[], options: Highli
 			let isAnyAnimating = false
 			
 			// 节点动画
-			nodeIds.forEach(nodeId => {
-				const startTime = startTimes.get('node_' + nodeId)
+				nodeIds.forEach(nodeId => {
+					const startTime = startTimes.get('node_' + nodeId)
 				if (!startTime) return
 
 				const nodeObj = nodeMap.get(nodeId)
